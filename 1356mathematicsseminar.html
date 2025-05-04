@@ -1,0 +1,290 @@
+<<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Coordinate Shooter Game</title>
+  <style>
+    body { margin: 0; font-family: sans-serif; background: #eaf7ff; text-align: center; }
+    canvas { display: block; margin: auto; border: 3px solid #333; }
+    #info, #controls, #timer, #gameCanvas { display: none; }
+    #info { margin: 10px; font-size: 18px; }
+
+    #questionBox, #nameInputBox, #leaderboardBox {
+      position: fixed;
+      top: 25%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #fff;
+      border: 3px solid #444;
+      padding: 20px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.2);
+      width: 450px;
+      font-size: 18px;
+      border-radius: 10px;
+      z-index: 10;
+    }
+    #questionBox button,
+    #nameInputBox button {
+      margin-top: 10px;
+      padding: 8px 15px;
+      font-size: 16px;
+      margin-right: 10px;
+      cursor: pointer;
+    }
+
+    #controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-top: 10px;
+    }
+    .control-row {
+      display: flex;
+      gap: 10px;
+    }
+    .btn {
+      font-size: 20px;
+      padding: 10px 20px;
+      border: 2px solid #333;
+      border-radius: 5px;
+      background: #fff;
+      cursor: pointer;
+    }
+
+    #timer {
+      font-size: 22px;
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+<div id="nameInputBox">
+  <div>Enter Your Name to Start the Game:</div>
+  <input type="text" id="playerNameInput" placeholder="Your name..." />
+  <br>
+  <button onclick="startGame()">Start Game</button>
+</div>
+
+<div id="timer">Time Left: 60s</div>
+<canvas id="gameCanvas" width="600" height="600"></canvas>
+<div id="info">Use Arrow Keys or Tap Buttons to Move • Press SPACE or Tap Shoot!</div>
+
+<div id="questionBox" style="display: none;">
+  <div id="questionText">Question will appear here...</div>
+  <button onclick="submitAnswer(true)">Correct</button>
+  <button onclick="submitAnswer(false)">Wrong</button>
+</div>
+
+<div id="controls">
+  <div class="control-row">
+    <button class="btn" onclick="move('up')">⬆️</button>
+  </div>
+  <div class="control-row">
+    <button class="btn" onclick="move('left')">⬅️</button>
+    <button class="btn" onclick="shoot()">🔥 Shoot</button>
+    <button class="btn" onclick="move('right')">➡️</button>
+  </div>
+  <div class="control-row">
+    <button class="btn" onclick="move('down')">⬇️</button>
+  </div>
+</div>
+
+<div id="leaderboardBox" style="display: none;">
+  <h2>🏆 Leaderboard</h2>
+  <ul id="leaderboardList"></ul>
+  <button onclick="location.reload()">Play Again</button>
+  <button onclick="resetLeaderboard()">Clear Leaderboard</button>
+</div>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+const questionBox = document.getElementById("questionBox");
+const questionText = document.getElementById("questionText");
+const timerEl = document.getElementById("timer");
+
+const playerNameInput = document.getElementById("playerNameInput");
+const nameInputBox = document.getElementById("nameInputBox");
+const leaderboardBox = document.getElementById("leaderboardBox");
+const leaderboardList = document.getElementById("leaderboardList");
+
+let playerName = "";
+const gridSize = 60;
+let player = { x: 5, y: 5 };
+let enemy = { x: Math.floor(Math.random() * 10), y: Math.floor(Math.random() * 10) };
+let score = 0;
+let timeLeft = 60;
+let gameOver = false;
+
+// Load leaderboard from localStorage or initialize empty
+let leaderboard = JSON.parse(localStorage.getItem("leaderboard")) || [];
+
+const playerImg = new Image();
+const enemyImg = new Image();
+playerImg.src = "https://i.imgur.com/Nx3FeXk.png";
+enemyImg.src = "https://i.imgur.com/B0CngyM.png";
+
+const questions = [
+  { q: "What are the coordinates of a point on the x-axis 4 units from the origin?", a: "(4, 0)" },
+  { q: "Which quadrant does the point (–3, 4) lie in?", a: "2nd Quadrant" },
+  { q: "What are the coordinates of the origin?", a: "(0, 0)" },
+  { q: "The point (0, –4) lies on which axis?", a: "y-axis" },
+  { q: "What is the sign of coordinates in 3rd quadrant?", a: "(–, –)" },
+];
+
+let currentQuestion = null;
+let imagesLoaded = 0;
+playerImg.onload = checkImagesLoaded;
+enemyImg.onload = checkImagesLoaded;
+
+function checkImagesLoaded() {
+  imagesLoaded++;
+  if (imagesLoaded === 2 && playerName !== "") drawGame();
+}
+
+function startGame() {
+  const name = playerNameInput.value.trim();
+  if (!name) {
+    alert("Please enter your name.");
+    return;
+  }
+  playerName = name;
+  nameInputBox.style.display = "none";
+  document.getElementById("timer").style.display = "block";
+  document.getElementById("gameCanvas").style.display = "block";
+  document.getElementById("info").style.display = "block";
+  document.getElementById("controls").style.display = "flex";
+  drawGame();
+}
+
+function drawGrid() {
+  ctx.strokeStyle = "#ccc";
+  ctx.font = "12px Arial";
+  ctx.fillStyle = "black";
+  for (let i = 0; i <= 10; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * gridSize, 0);
+    ctx.lineTo(i * gridSize, canvas.height);
+    ctx.stroke();
+    ctx.fillText(i, i * gridSize + 3, 12);
+    ctx.beginPath();
+    ctx.moveTo(0, i * gridSize);
+    ctx.lineTo(canvas.width, i * gridSize);
+    ctx.stroke();
+    ctx.fillText(i, 3, i * gridSize + 12);
+  }
+}
+
+function drawPlayer() {
+  ctx.drawImage(playerImg, player.x * gridSize, player.y * gridSize, gridSize, gridSize);
+}
+
+function drawEnemy() {
+  ctx.drawImage(enemyImg, enemy.x * gridSize, enemy.y * gridSize, gridSize, gridSize);
+}
+
+function drawScore() {
+  ctx.fillStyle = "black";
+  ctx.font = "20px Arial";
+  ctx.fillText("Score: " + score, 480, 25);
+}
+
+function drawGame() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawGrid();
+  drawPlayer();
+  drawEnemy();
+  drawScore();
+}
+
+document.addEventListener("keydown", function (e) {
+  if (gameOver) return;
+  if (e.key === "ArrowUp" && player.y > 0) player.y--;
+  if (e.key === "ArrowDown" && player.y < 9) player.y++;
+  if (e.key === "ArrowLeft" && player.x > 0) player.x--;
+  if (e.key === "ArrowRight" && player.x < 9) player.x++;
+  if (e.code === "Space") shoot();
+  drawGame();
+});
+
+function move(direction) {
+  if (gameOver) return;
+  if (direction === "up" && player.y > 0) player.y--;
+  if (direction === "down" && player.y < 9) player.y++;
+  if (direction === "left" && player.x > 0) player.x--;
+  if (direction === "right" && player.x < 9) player.x++;
+  drawGame();
+}
+
+function shoot() {
+  if (gameOver) return;
+  if (player.x === enemy.x && player.y === enemy.y) {
+    score++;
+    askQuestion();
+    enemy = { x: Math.floor(Math.random() * 10), y: Math.floor(Math.random() * 10) };
+  }
+  drawGame();
+}
+
+function askQuestion() {
+  const randomIndex = Math.floor(Math.random() * questions.length);
+  currentQuestion = questions[randomIndex];
+  questionText.innerHTML = "<strong>" + currentQuestion.q + "</strong><br><br>Answer: " + currentQuestion.a + "<br><br>Is this correct?";
+  questionBox.style.display = "block";
+}
+
+function submitAnswer(isCorrect) {
+  if (isCorrect) {
+    score += 1;
+    alert("Correct! Bonus point added.");
+  } else {
+    alert("Incorrect! Try the next one.");
+  }
+  questionBox.style.display = "none";
+  drawGame();
+}
+
+function updateTimer() {
+  if (timeLeft <= 0) {
+    endGame();
+    return;
+  }
+  timeLeft--;
+  timerEl.textContent = `Time Left: ${timeLeft}s`;
+}
+
+function endGame() {
+  gameOver = true;
+  timerEl.textContent = "Time's Up!";
+  
+  leaderboard.push({ name: playerName, score: score });
+  leaderboard.sort((a, b) => b.score - a.score);
+  leaderboard = leaderboard.slice(0, 5); // Top 5 only
+  localStorage.setItem("leaderboard", JSON.stringify(leaderboard));
+
+  showLeaderboard();
+}
+
+function showLeaderboard() {
+  leaderboardBox.style.display = "block";
+  leaderboardList.innerHTML = leaderboard.map((entry, i) => 
+    `<li><strong>${i + 1}. ${entry.name}</strong>: ${entry.score} pts</li>`
+  ).join('');
+}
+
+function resetLeaderboard() {
+  localStorage.removeItem("leaderboard");
+  leaderboard = [];
+  leaderboardList.innerHTML = "";
+  alert("Leaderboard cleared!");
+}
+
+setInterval(() => {
+  if (!gameOver && playerName !== "") updateTimer();
+}, 1000);
+</script>
+
+</body>
+</html>
